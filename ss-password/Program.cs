@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace ss_password
 {
@@ -122,6 +123,35 @@ namespace ss_password
 
     }
 
+    class ServerInfo
+    {
+        private string host;
+        private string port;
+        private string method;
+        private string password;
+
+        public string Host
+        {
+            get { return host; }
+            set { host = value;  }
+        }
+        public string Port
+        {
+            get { return port; }
+            set { port = value; }
+        }
+        public string Method
+        {
+            get { return method; }
+            set { method = value; }
+        }
+        public string Password
+        {
+            get { return password; }
+            set { password = value; }
+        }
+    }
+
     public class PasswordGetter
     {
         public PasswordGetter()
@@ -130,14 +160,156 @@ namespace ss_password
 
         static void Main()
         {
-            string issUrl = "http://www.ishadowsocks.net/";
-            string mockUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Microsoft/CS";
+            string issUrl = "http://www.ishadowsocks.org/";
+            string mockUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36";
             Debugger.Log(0, null, "Sending request");
 
             HttpWebResponse response = HttpHelper.CreateGetHttpResponse(issUrl, 0, mockUserAgent, null);
             StreamReader reader = new StreamReader(response.GetResponseStream());
             string htmlDoc = reader.ReadToEnd();
-            
+            int serverAIdx = htmlDoc.IndexOf("A服务器地址");
+            int serverBIdx = htmlDoc.IndexOf("B服务器地址");
+            int serverCIdx = htmlDoc.IndexOf("C服务器地址");
+
+            string serverAInfo = htmlDoc.Substring(serverAIdx, serverBIdx - serverAIdx);
+            string serverBInfo = htmlDoc.Substring(serverBIdx, serverCIdx - serverBIdx);
+
+            List<ServerInfo> serverList = new List<ServerInfo>();
+            serverList.Add(GetServerInfoObject(serverAInfo));
+            serverList.Add(GetServerInfoObject(serverBInfo));
+
+            string ssDir = @"E:\tools\shadowsocks\";
+            bool updated = UpdateSSServerInfo(ssDir + "gui-config.json", serverList);
+
+            if(updated)
+            {
+                StartupShadowSocks(ssDir, "Shadowsocks.exe");
+            }
+        }
+
+        static ServerInfo GetServerInfoObject(string serverInfoString)
+        {
+            ServerInfo serverInfo = null;
+            if(serverInfoString != null && serverInfoString.Length > 0)
+            {
+                serverInfo = new ServerInfo();
+                string[] infoArray = Regex.Split(serverInfoString, "\\s+<h4>");
+                foreach (string s in infoArray)
+                {
+                    int beginIdx = 0;
+                    if (s.Contains("服务器地址:"))
+                    {
+                        beginIdx = s.IndexOf("服务器地址:") + 6;
+                        serverInfo.Host = s.Substring(beginIdx, s.IndexOf("</h4>") - beginIdx);
+                    }
+                    else if(s.Contains("端口:"))
+                    {
+                        beginIdx = s.IndexOf("端口:") + 3;
+                        serverInfo.Port = s.Substring(beginIdx, s.IndexOf("</h4>") - beginIdx);
+                    }
+                    else if (s.Contains("密码:"))
+                    {
+                        beginIdx = s.IndexOf("密码:") + 3;
+                        serverInfo.Password = s.Substring(beginIdx, s.IndexOf("</h4>") - beginIdx);
+                    }
+                    else if (s.Contains("加密方式:"))
+                    {
+                        beginIdx = s.IndexOf("加密方式:") + 5;
+                        serverInfo.Method = s.Substring(beginIdx, s.IndexOf("</h4>") - beginIdx);
+                    }
+                }
+            }
+
+            return serverInfo;
+        }
+
+        static bool UpdateSSServerInfo(string path, List<ServerInfo> serverList)
+        {
+            if(File.Exists(path))
+            {
+                FileStream fs = File.OpenRead(path);
+
+                //判断文件是文本文件还二进制文件。该方法似乎不科学
+                byte b;
+                for (long i = 0; i < fs.Length; i++)
+                {
+                    b = (byte)fs.ReadByte();
+                    if (b == 0)
+                    {
+                        return false;//有此字节则表示改文件不是文本文件。就不用替换了
+                    }
+                }
+                //判断文本文件编码规则。
+                byte[] bytes = new byte[2];
+                Encoding coding = Encoding.Default;
+                if (fs.Read(bytes, 0, 2) > 2)
+                {
+                    if (bytes == new byte[2] { 0xFF, 0xFE }) coding = Encoding.Unicode;
+                    if (bytes == new byte[2] { 0xFE, 0xFF }) coding = Encoding.BigEndianUnicode;
+                    if (bytes == new byte[2] { 0xEF, 0xBB }) coding = Encoding.UTF8;
+                }
+                fs.Close();
+
+                string text = File.ReadAllText(path);
+                bool needUpdate = false;
+                foreach (ServerInfo si in serverList)
+                {
+                    int hostIdx = text.IndexOf(si.Host);
+                    string serverInfoSection = text.Substring(hostIdx, text.IndexOf("}", hostIdx) - hostIdx);
+                    string updatedServerInfoSection = Regex.Replace(serverInfoSection, "\"password\": \".*\",", "\"password\": \"" + si.Password + "\",");
+                    if(!serverInfoSection.Equals(updatedServerInfoSection))
+                    {
+                        needUpdate = true;
+                    }
+
+                    text = text.Replace(serverInfoSection, updatedServerInfoSection);
+                }
+
+                if(needUpdate)
+                {
+                    File.Copy(path, path + ".backup", true); // backup
+                    File.WriteAllText(path, text, coding);
+                    return true;
+                }
+                else
+                {
+                    return false;
+                }
+                
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        static void StartupShadowSocks(string directory, string filename)
+        {
+
+            System.Diagnostics.Process[] process = System.Diagnostics.Process.GetProcessesByName("Shadowsocks");
+            foreach (System.Diagnostics.Process p in process)
+            {
+                p.Kill();
+            }
+
+            //设置启动程序的信息
+            System.Diagnostics.ProcessStartInfo Info = new System.Diagnostics.ProcessStartInfo();
+            //设置外部程序名  
+            Info.FileName = filename;
+            //设置外部程序工作目录为   C:\\ 
+            Info.WorkingDirectory = directory;
+
+            //声明一个程序类  
+            System.Diagnostics.Process Proc;
+            try
+            {
+                Proc = System.Diagnostics.Process.Start(Info);
+                System.Threading.Thread.Sleep(500);
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                return;
+            }
         }
     }
 }
