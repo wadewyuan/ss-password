@@ -11,7 +11,7 @@ using System.Web.Script.Serialization;
 
 namespace ss_password
 {
-    public class HttpHelper
+    class HttpHelper
     {
         /// <summary>  
         /// 创建GET方式的HTTP请求  
@@ -124,63 +124,6 @@ namespace ss_password
 
     }
 
-    class Config
-    {
-        public List<ServerInfo> configs;
-        public string strategy;
-        public int index = 0;
-        public bool global;
-        public bool enabled;
-        public bool shareOverLan;
-        public bool isDefault;
-        public int localPort;
-        public string pacUrl;
-        public bool useOnlinePac;
-        public bool availabilityStatistics;
-        public bool autoCheckUpdate;
-        public string logViewer;
-    }
-
-    class ServerInfo
-    {
-        public string server;
-        public string server_port;
-        public string method;
-        public string password;
-        public string remarks = "";
-        public bool auth;
-
-        public ServerInfo()
-        {
-            this.remarks = "";
-            this.auth = false;
-        }
-
-        public override bool Equals(object obj)
-        {
-            // If parameter is null return false.
-            if (obj == null)
-            {
-                return false;
-            }
-
-            // If parameter cannot be cast to ServerInfo return false.
-            ServerInfo si = obj as ServerInfo;
-            if((System.Object)si == null)
-            {
-                return false;
-            }
-
-            // Return true if the fields match:
-            return (server == si.server) && (server_port == si.server_port) && (method == si.method) && (password == si.password);
-        }
-
-        public bool RequiredFieldsAllSet()
-        {
-            return server != null && server_port != null && method != null && password != null;
-        }
-    }
-
     public class PasswordGetter
     {
         public PasswordGetter()
@@ -289,7 +232,7 @@ namespace ss_password
                 string text = File.ReadAllText(path);
                 bool needUpdate = false;
                 JavaScriptSerializer javaScriptSerializer = new JavaScriptSerializer();
-                Config config = (Config) javaScriptSerializer.Deserialize(text, typeof(Config));
+                ShadowSocksConfig config = (ShadowSocksConfig) javaScriptSerializer.Deserialize(text, typeof(ShadowSocksConfig));
                 for(int i = 0; i < config.configs.Count; i++)
                 {
                     if(!config.configs[i].Equals(serverList[i]))
