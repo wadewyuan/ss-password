@@ -7,6 +7,7 @@ using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Web.Script.Serialization;
 
 namespace ss_password
 {
@@ -123,32 +124,60 @@ namespace ss_password
 
     }
 
+    class Config
+    {
+        public List<ServerInfo> configs;
+        public string strategy;
+        public int index = 0;
+        public bool global;
+        public bool enabled;
+        public bool shareOverLan;
+        public bool isDefault;
+        public int localPort;
+        public string pacUrl;
+        public bool useOnlinePac;
+        public bool availabilityStatistics;
+        public bool autoCheckUpdate;
+        public string logViewer;
+    }
+
     class ServerInfo
     {
-        private string host;
-        private string port;
-        private string method;
-        private string password;
+        public string server;
+        public string server_port;
+        public string method;
+        public string password;
+        public string remarks = "";
+        public bool auth;
 
-        public string Host
+        public ServerInfo()
         {
-            get { return host; }
-            set { host = value;  }
+            this.remarks = "";
+            this.auth = false;
         }
-        public string Port
+
+        public override bool Equals(object obj)
         {
-            get { return port; }
-            set { port = value; }
+            // If parameter is null return false.
+            if (obj == null)
+            {
+                return false;
+            }
+
+            // If parameter cannot be cast to ServerInfo return false.
+            ServerInfo si = obj as ServerInfo;
+            if((System.Object)si == null)
+            {
+                return false;
+            }
+
+            // Return true if the fields match:
+            return (server == si.server) && (server_port == si.server_port) && (method == si.method) && (password == si.password);
         }
-        public string Method
+
+        public bool RequiredFieldsAllSet()
         {
-            get { return method; }
-            set { method = value; }
-        }
-        public string Password
-        {
-            get { return password; }
-            set { password = value; }
+            return server != null && server_port != null && method != null && password != null;
         }
     }
 
@@ -160,7 +189,7 @@ namespace ss_password
 
         static void Main()
         {
-            string issUrl = "http://www.ishadowsocks.org/";
+            string issUrl = Properties.Resources.iss_url;
             string mockUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36";
             Debugger.Log(0, null, "Sending request");
 
@@ -173,12 +202,14 @@ namespace ss_password
 
             string serverAInfo = htmlDoc.Substring(serverAIdx, serverBIdx - serverAIdx);
             string serverBInfo = htmlDoc.Substring(serverBIdx, serverCIdx - serverBIdx);
+            string serverCInfo = htmlDoc.Substring(serverCIdx);
 
             List<ServerInfo> serverList = new List<ServerInfo>();
             serverList.Add(GetServerInfoObject(serverAInfo));
             serverList.Add(GetServerInfoObject(serverBInfo));
+            serverList.Add(GetServerInfoObject(serverCInfo));
 
-            string ssDir = @"E:\tools\shadowsocks\";
+            string ssDir = Properties.Resources.ss_dir;
             bool updated = UpdateSSServerInfo(ssDir + "gui-config.json", serverList);
 
             if(updated)
@@ -200,22 +231,27 @@ namespace ss_password
                     if (s.Contains("服务器地址:"))
                     {
                         beginIdx = s.IndexOf("服务器地址:") + 6;
-                        serverInfo.Host = s.Substring(beginIdx, s.IndexOf("</h4>") - beginIdx);
+                        serverInfo.server = s.Substring(beginIdx, s.IndexOf("</h4>") - beginIdx);
                     }
                     else if(s.Contains("端口:"))
                     {
                         beginIdx = s.IndexOf("端口:") + 3;
-                        serverInfo.Port = s.Substring(beginIdx, s.IndexOf("</h4>") - beginIdx);
+                        serverInfo.server_port = s.Substring(beginIdx, s.IndexOf("</h4>") - beginIdx);
                     }
                     else if (s.Contains("密码:"))
                     {
                         beginIdx = s.IndexOf("密码:") + 3;
-                        serverInfo.Password = s.Substring(beginIdx, s.IndexOf("</h4>") - beginIdx);
+                        serverInfo.password = s.Substring(beginIdx, s.IndexOf("</h4>") - beginIdx);
                     }
                     else if (s.Contains("加密方式:"))
                     {
                         beginIdx = s.IndexOf("加密方式:") + 5;
-                        serverInfo.Method = s.Substring(beginIdx, s.IndexOf("</h4>") - beginIdx);
+                        serverInfo.method = s.Substring(beginIdx, s.IndexOf("</h4>") - beginIdx);
+                    }
+
+                    if(serverInfo.RequiredFieldsAllSet())
+                    {
+                        break;
                     }
                 }
             }
@@ -252,21 +288,21 @@ namespace ss_password
 
                 string text = File.ReadAllText(path);
                 bool needUpdate = false;
-                foreach (ServerInfo si in serverList)
+                JavaScriptSerializer javaScriptSerializer = new JavaScriptSerializer();
+                Config config = (Config) javaScriptSerializer.Deserialize(text, typeof(Config));
+                for(int i = 0; i < config.configs.Count; i++)
                 {
-                    int hostIdx = text.IndexOf(si.Host);
-                    string serverInfoSection = text.Substring(hostIdx, text.IndexOf("}", hostIdx) - hostIdx);
-                    string updatedServerInfoSection = Regex.Replace(serverInfoSection, "\"password\": \".*\",", "\"password\": \"" + si.Password + "\",");
-                    if(!serverInfoSection.Equals(updatedServerInfoSection))
+                    if(!config.configs[i].Equals(serverList[i]))
                     {
                         needUpdate = true;
+                        break;
                     }
-
-                    text = text.Replace(serverInfoSection, updatedServerInfoSection);
                 }
 
                 if(needUpdate)
                 {
+                    config.configs = serverList; // update serverlist
+                    text = javaScriptSerializer.Serialize(config);
                     File.Copy(path, path + ".backup", true); // backup
                     File.WriteAllText(path, text, coding);
                     return true;
