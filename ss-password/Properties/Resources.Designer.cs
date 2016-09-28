@@ -61,20 +61,11 @@ namespace ss_password.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to http://www.ishadowsocks.org/.
+        ///   Looks up a localized string similar to ss-config.ini.
         /// </summary>
-        internal static string iss_url {
+        internal static string ini_config {
             get {
-                return ResourceManager.GetString("iss_url", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to E:\tools\shadowsocks\.
-        /// </summary>
-        internal static string ss_dir {
-            get {
-                return ResourceManager.GetString("ss_dir", resourceCulture);
+                return ResourceManager.GetString("ini_config", resourceCulture);
             }
         }
     }

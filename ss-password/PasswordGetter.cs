@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Security;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -124,6 +125,28 @@ namespace ss_password
 
     }
 
+    class IniReader
+    {
+
+        private string path;
+
+        [DllImport("kernel32")]  
+        private static extern int GetPrivateProfileString(string section, string key, string def,
+                    StringBuilder retVal, int size, string filePath);
+
+        public IniReader(string IniPath)
+        {
+            path = IniPath;
+        }
+
+        public string IniReadValue(string Section, string Key)
+        {
+            StringBuilder temp = new StringBuilder(255);
+            int i = GetPrivateProfileString(Section, Key, "", temp, 255, this.path);
+            return temp.ToString();
+        }
+    }
+
     public class PasswordGetter
     {
         public PasswordGetter()
@@ -132,7 +155,11 @@ namespace ss_password
 
         static void Main()
         {
-            string issUrl = Properties.Resources.iss_url;
+
+            // Load configuration from ini
+            IniReader iniReader = new IniReader(System.Environment.CurrentDirectory + "\\" + Properties.Resources.ini_config);
+
+            string issUrl = iniReader.IniReadValue("Config", "iss_url");
             string mockUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36";
             Debugger.Log(0, null, "Sending request");
 
@@ -152,8 +179,9 @@ namespace ss_password
             serverList.Add(GetServerInfoObject(serverBInfo));
             serverList.Add(GetServerInfoObject(serverCInfo));
 
-            string ssDir = Properties.Resources.ss_dir;
-            bool updated = UpdateSSServerInfo(ssDir + "gui-config.json", serverList);
+            string ssDir = iniReader.IniReadValue("Config", "ss_dir");
+            string ssConfig = iniReader.IniReadValue("Config", "gui_config");
+            bool updated = UpdateSSServerInfo(ssDir + ssConfig, serverList);
 
             if(updated)
             {

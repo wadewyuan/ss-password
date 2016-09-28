@@ -117,10 +117,7 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="iss_url" xml:space="preserve">
-    <value>http://www.ishadowsocks.org/</value>
-  </data>
-  <data name="ss_dir" xml:space="preserve">
-    <value>E:\tools\shadowsocks\</value>
+  <data name="ini_config" xml:space="preserve">
+    <value>ss-config.ini</value>
   </data>
 </root>
